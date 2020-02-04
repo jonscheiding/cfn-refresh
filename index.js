@@ -1,26 +1,5 @@
 const fs = require('fs');
 const AWS = require('aws-sdk');
-const yargs = require('yargs');
-
-const args = yargs
-  .option('stack-name', {
-    alias: 's',
-    describe: 'The name of the stack to update.'
-  })
-  .option('template-file', {
-    alias: 'f',
-    describe: 'A YML or JSON file containing a new CloudFormation template.'
-  })
-  .option('capability-iam', {
-    boolean: true,
-    describe: 'Acknowledge that the template may create IAM resources.'
-  })
-  .option('capability-named-iam', {
-    boolean: true,
-    describe: 'Acknowledge that the template may create named IAM resources.'
-  })
-  .demandOption('stack-name')
-  .argv;
 
 function delay(time) {
   return new Promise((resolve) => {
@@ -28,7 +7,7 @@ function delay(time) {
   });
 }
 
-async function execute() {
+async function execute(args) {
   const cfn = new AWS.CloudFormation();
 
   const capabilities = Object.keys(args)
