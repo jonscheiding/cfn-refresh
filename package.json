@@ -6,5 +6,8 @@
   "dependencies": {
     "aws-sdk": "^2.610.0",
     "yargs": "^15.1.0"
+  },
+  "bin": {
+    "cfn-refresh": "./cli.js"
   }
 }

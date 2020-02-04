@@ -101,4 +101,4 @@ async function execute() {
   }
 }
 
-execute();
+module.exports = execute;
