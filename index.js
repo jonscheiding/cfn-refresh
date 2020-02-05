@@ -1,41 +1,37 @@
 const fs = require('fs');
 const AWS = require('aws-sdk');
 
-function delay(time) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, time);
-  });
-}
+const cfn = new AWS.CloudFormation();
 
 async function execute(args) {
-  const cfn = new AWS.CloudFormation();
+  const stackName = args['stack-name'];
 
-  const capabilities = Object.keys(args)
-    .filter(arg => arg.startsWith('capability-'))
-    .filter(arg => args[arg])
-    .map(arg => arg.replace(/-/g, '_').toUpperCase());
+  console.log(`Getting previous parameter values for stack '${stackName}'.`)
+  let stackResult = await describeStack(stackName);
+
+  console.log(`Updating stack '${stackName}'.`);
+  await beginUpdateStack(args, stackResult.Parameters);
+
+  stackResult = await waitForUpdateToComplete(stackName);
+
+  for(const o of stackResult.Outputs) {
+    console.log(`${o.ExportName} : ${o.OutputValue}`);
+  }
+}
+
+async function beginUpdateStack(args, parameters) {
+  const stackName = args['stack-name'];
+  const capabilities = parseCapabilities(args);
 
   let templateBody = null;
   if(args['template-file']) {
     templateBody = fs.readFileSync(args['template-file']).toString();
   }
 
-  console.log(`Getting previous parameter values for stack '${args['stack-name']}'.`)
-
-  let describeResult = await cfn
-    .describeStacks({
-      StackName: args['stack-name']
-    })
-    .promise();
-
-  const parameters = describeResult.Stacks[0].Parameters;
-
-  console.log(`Updating stack '${args['stack-name']}'.`);
-
   try {
     await cfn
       .updateStack({
-        StackName: args['stack-name'],
+        StackName: stackName,
         Parameters: parameters,
         UsePreviousTemplate: templateBody === null,
         TemplateBody: templateBody,
@@ -56,28 +52,50 @@ async function execute(args) {
         break;
     }
   }
+}
 
+async function waitForUpdateToComplete(stackName) {
+  let stackResult;
   let complete = false;
-
+  
   do {
-    describeResult = await cfn
-      .describeStacks({
-        StackName: args['stack-name']
-      })
-      .promise();
-
-    const status = describeResult.Stacks[0].StackStatus;
+    stackResult = await describeStack(stackName);
+    
+    const status = stackResult.StackStatus;
     console.log(status);
-    complete = status === 'UPDATE_COMPLETE' || status === 'UPDATE_ROLLBACK_COMPLETE'
-
-    if(!complete) {
+    
+    complete = status === 'UPDATE_COMPLETE'
+    || status === 'UPDATE_ROLLBACK_COMPLETE';
+    
+    if (!complete) {
       await delay(5000);
     }
-  } while(!complete);
+  } while (!complete);
+  
+  return stackResult;
+}
 
-  for(const o of describeResult.Stacks[0].Outputs) {
-    console.log(`${o.ExportName} : ${o.OutputValue}`);
-  }
+async function describeStack(stackName) {
+  let describeResult = await cfn
+  .describeStacks({
+    StackName: stackName
+  })
+  .promise();
+
+  return describeResult.Stacks[0];
+}
+
+function parseCapabilities(args) {
+  return Object.keys(args)
+    .filter(arg => arg.startsWith('capability-'))
+    .filter(arg => args[arg])
+    .map(arg => arg.replace(/-/g, '_').toUpperCase());
+}
+
+function delay(time) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, time);
+  });
 }
 
 module.exports = execute;
